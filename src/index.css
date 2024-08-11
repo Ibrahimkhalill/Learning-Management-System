@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.slick-slide > div {
+  margin: 0px 10px;
+}
+
+.light-theme {
+  --background-color: #ffffff;
+  --text-color: #000000;
+  --button-background: #000;
+  --button-text: #ffffff;
+}
+
+/* Dark Theme */
+.dark-theme {
+  background-color: #0f172a;
+  --text-color: #fff;
+}
+
+
+
+.slick-prev:before, .slick-next:before {
+  font-family: 'slick';
+  font-size: 20px;
+  line-height: 1;
+  opacity: .75;
+  color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

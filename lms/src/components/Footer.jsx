@@ -1,21 +1,23 @@
 import React from "react";
 import img1 from "../assets/download (1).svg";
 import img2 from "../assets/sslcommerz-banner.png";
+import { FaFacebookF } from "react-icons/fa";
+import { Link } from "react-router-dom";
+
 const Footer = () => {
   return (
-    <footer className="w-full border-t border-gray-700 bg-gray-900">
+    <footer className="w-full border-t  footer-border-color">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="my-6 flex flex-col-reverse items-center justify-between gap-6 text-sm lg:flex-row">
-         
           <a
             href="https://Trace Academy.io/"
-            className="flex justify-center font-serif font-bold text-2xl text-white"
+            className="flex justify-center font-serif font-bold text-2xl text-footer"
           >
             Trace Academy
           </a>
-          <div className="flex flex-wrap justify-center space-x-4 text-slate-600 dark:text-slate-500 lg:flex-row lg:space-x-5">
+          <div className="flex flex-wrap justify-center space-x-4 text-slate-600  lg:flex-row lg:space-x-5">
             <a
-              className="hover:text-slate-text-slate-700 dark:hover:text-slate-400"
+              className="hover:text-slate-text-slate-700 "
               href="/verify-email"
             >
               Varified Email
@@ -23,46 +25,31 @@ const Footer = () => {
             <a
               href="#"
               target="_blank"
-              className="hover:text-slate-text-slate-700 dark:hover:text-slate-400"
+              className="hover:text-slate-text-slate-700  text"
               rel="noreferrer"
             >
               Facebook Group
             </a>
-            <span className="hover:text-slate-text-slate-700 cursor-pointer dark:hover:text-slate-400">
+            <span className="hover:text-slate-text-slate-700 cursor-pointer ">
               Payment
             </span>
-            <a
-              className="hover:text-slate-text-slate-700 dark:hover:text-slate-400"
-              href="/contact"
-            >
+            <a className="hover:text-slate-text-slate-700 " href="/contact">
               Contact
             </a>
           </div>
           <div className="flex mt-4  space-x-4 sm:justify-center sm:mt-0 ">
             <a
               href="javascript:;"
-              className="w-9 h-9 rounded-full border border-gray-700 flex justify-center items-center hover:border-indigo-600"
+              className="w-9 h-9 text-footer rounded-full border border-gray-700 flex justify-center items-center hover:border-indigo-600"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-              >
-                <path
-                  id="Vector"
-                  d="M11.3214 8.93666L16.4919 3.05566H15.2667L10.7772 8.16205L7.1914 3.05566H3.05566L8.47803 10.7774L3.05566 16.9446H4.28097L9.022 11.552L12.8088 16.9446H16.9446L11.3211 8.93666H11.3214ZM9.64322 10.8455L9.09382 10.0765L4.72246 3.95821H6.60445L10.1322 8.8959L10.6816 9.66481L15.2672 16.083H13.3852L9.64322 10.8458V10.8455Z"
-                  fill="white"
-                />
-              </svg>
+              <FaFacebookF />
             </a>
             <a
               href="javascript:;"
               className="w-9 h-9 rounded-full border border-gray-700 flex justify-center items-center hover:border-indigo-600"
             >
               <svg
-                className="w-[1.25rem] h-[1.125rem] text-white"
+                className="w-[1.25rem] h-[1.125rem] text-footer"
                 viewBox="0 0 15 15"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -78,7 +65,7 @@ const Footer = () => {
               className="w-9 h-9 rounded-full border border-gray-700 flex justify-center items-center hover:border-indigo-600"
             >
               <svg
-                className="w-[1rem] h-[1rem] text-white"
+                className="w-[1rem] h-[1rem] text-footer"
                 viewBox="0 0 13 12"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -94,7 +81,7 @@ const Footer = () => {
               className="w-9 h-9 rounded-full border border-gray-700 flex justify-center items-center hover:border-indigo-600"
             >
               <svg
-                className="w-[1.25rem] h-[0.875rem] text-white"
+                className="w-[1.25rem] h-[0.875rem] text-footer"
                 viewBox="0 0 16 12"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
@@ -150,12 +137,17 @@ const Footer = () => {
           </span>
         </div>
 
-        <div className="py-7 border-t border-gray-700 ">
-          <div className="flex items-center justify-center flex-col lg:space-y-0 space-y-8  lg:flex-row">
-            <span className="text-gray-400  block">
+        <div className="py-7 border-t   footer-border-color">
+          <div className="flex items-center justify-between md:gap-0 gap-3 flex-col-reverse lg:space-y-0 space-y-8  lg:flex-row">
+            <span className="text-slate-600 block">
               ©<a href="https://Trace Academy.io/">Trace Academy</a> 2024, All
               rights reserved.
             </span>
+            <div className="text-slate-600 flex items-center justify-center  gap-4">
+              <Link to={"/supported-browsers"}>Supported browsers</Link>
+              <Link to={"/terms"}>terms & condition</Link>
+              <Link to={"/privacy-policy"}>privacy policy</Link>
+            </div>
           </div>
         </div>
       </div>

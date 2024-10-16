@@ -1,6 +1,5 @@
 /* eslint-disable react/no-unescaped-entities */
 import img1 from "../assets/download.svg";
-import img2 from "../assets/peep1.svg";
 import img3 from "../assets/peep4.d500693a.svg";
 import img4 from "../assets/peep1.f4841716.svg";
 import img5 from "../assets/faq.8116aa7d.svg";
@@ -11,13 +10,11 @@ import { MdOutlineWatchLater } from "react-icons/md";
 import { IoIosArrowDown } from "react-icons/io";
 import { IoIosArrowUp } from "react-icons/io";
 import content from "../assets/content.svg";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MdOutlineOndemandVideo } from "react-icons/md";
 import { Modal } from "antd";
 import { CgLock } from "react-icons/cg";
 import "@dotlottie/player-component";
-import ShakaPlayer from "shaka-player-react";
-import "shaka-player-react/dist/controls.css";
 import { useNavigate, useParams } from "react-router-dom";
 import axiosInstance from "../components/axiosInstance";
 import { useTheme } from "../components/ThemeContext";
@@ -42,13 +39,17 @@ const imageStyle = {
 };
 function Enrollment() {
   const [visible, setVisible] = useState(false);
+  const [visibleButton, setvisibleButton] = useState(false);
   const [Openvisible, setOpenVisible] = useState(false);
   const { theme } = useTheme();
-  const { pk } = useParams();
+  const { name } = useParams();
   const navigate = useNavigate();
   const [videoData, setVideoData] = useState([]);
   const [Course, setCourse] = useState([]);
+  const [feedBackData, setFeedBack] = useState([]);
   const [loading, setLoading] = useState(false);
+  const containerRef = useRef(null);
+  const [iframeKey, setIframeKey] = useState(0); // Add a state for iframe key
 
   const [Previewid, setPreviewId] = useState(null);
   const [id, setId] = useState(null);
@@ -83,23 +84,30 @@ function Enrollment() {
   const [videoId, setVideoId] = useState("");
   const [otp, setOtp] = useState("");
   const [playbackInfo, setPlaybackInfo] = useState("");
-  const handleOpen = (item) => {
+  const handleOpen = async (item) => {
     setModal1Open(true);
-    setSource(item.video_url);
+    // setVideoId(item.video_url);
+
+    try {
+      const response = await axiosInstance.post(
+        "/videos/getOtpFromVideoCipher",
+        {
+          videoId: item.video_url,
+        }
+      );
+      setOtp(response.data.otp);
+      setPlaybackInfo(response.data.playbackInfo);
+      console.log(response.data);
+    } catch (error) {
+      console.error("Error fetching video data", error);
+    }
   };
-  // const drmConfig = {
-  //   servers: {
-  //     "com.widevine.alpha": "https://your-drm-license-server-url",
-  //   },
-  //   advanced: {
-  //     "com.widevine.alpha": {
-  //       videoRobustness: "SW_SECURE_DECODE",
-  //       audioRobustness: "SW_SECURE_DECODE",
-  //     },
-  //   },
-  // };
+
   const handlecancel = () => {
     setModal1Open(false);
+    setOtp(null);
+    setPlaybackInfo(null);
+    setIframeKey((prevKey) => prevKey + 1);
   };
 
   useEffect(() => {
@@ -115,23 +123,37 @@ function Enrollment() {
   const handleNavigate = () => {
     navigate("/enroll");
   };
+  console.log(name);
+
   useEffect(() => {
     const fetchCourse = async () => {
       setLoading(true);
       try {
         const response = await axiosInstance.get("/courses/getAll");
-        setCourse(response.data);
+        const filter = response.data.find((data) => data.course_name === name);
+        console.log(response);
+
+        try {
+          const response = await axiosInstance.post(
+            "/chapters/getVideosByChapters",
+            {
+              idCourses: filter?.idCourses,
+            }
+          );
+          setVideoData(response.data);
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+        setCourse(filter);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     };
-    const fetchContent = async () => {
+    const fetchReveiw = async () => {
       try {
-        const response = await axiosInstance.get('/chapters/getVideosByChapters', {
-          idCourses: pk
-      },
-    );
-        setVideoData(response.data);
+        const response = await axiosInstance.get("/feedbacks/getAll");
+
+        setFeedBack(response.data);
         setLoading(false);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -139,14 +161,63 @@ function Enrollment() {
     };
 
     fetchCourse();
-    fetchContent();
+    fetchReveiw();
   }, []);
 
-  const CourseData = Course.find((data) => data.idCourses == pk);
+  useEffect(() => {
+    const checkHeight = () => {
+      if (containerRef.current) {
+        setvisibleButton(containerRef.current.scrollHeight > 700);
+      }
+    };
+    // Check height on mount
+    checkHeight();
+    // Check height on window resize
+    window.addEventListener("resize", checkHeight);
+    // Cleanup event listener
+    return () => window.removeEventListener("resize", checkHeight);
+  }, [feedBackData, theme]);
 
+  useEffect(() => {
+    const fetchVideoData = async () => {
+      try {
+        const response = await axiosInstance.post(
+          "/videos/getOtpFromVideoCipher",
+          {
+            videoId: videoId,
+          }
+        );
+        setOtp(response.data.otp);
+        setPlaybackInfo(response.data.playbackInfo);
+        console.log(response.data);
+      } catch (error) {
+        console.error("Error fetching video data", error);
+      }
+    };
+
+    fetchVideoData();
+  }, [videoId]);
+
+  useEffect(() => {
+    if (Course && feedBackData.length > 0) {
+      const filter = feedBackData.filter(
+        (data) => data.idCourses === Course?.idCourses
+      );
+      setFeedBack(filter);
+      console.log(filter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Course]);
   return (
     <>
-      <div className={`${theme==="light" ? "text-black bg-slate-50": "text-white "} w-full  bg-pattern md:h-full py-10 dark:bg-dpattern lg:flex lg:h-full lg:items-center lg:justify-center lg:py-0`}>
+      <div
+        className={`${
+          theme === "light" ? "text-black bg-slate-50" : "text-white "
+        } w-full relative  bg-pattern md:h-full py-10 dark:bg-dpattern lg:flex lg:h-full lg:items-center lg:justify-center lg:py-0`}
+      >
+        <div className="absolute right-[28%] top-0  h-[100px] w-[200px] rotate-12 rounded-3xl bg-gradient-to-l from-blue-600 to-sky-400 opacity-20 blur-3xl filter dark:block dark:opacity-30 lg:top-44 lg:right-20 lg:h-72 lg:w-[350px] xl:h-80 "></div>
+        <div className="absolute left-[28%] top-28  rotate-12 rounded-3xl bg-sky-800  blur-3xl filter opacity-30 lg:h-32 lg:w-[450px] lg:block xl:h-44 xl:w-[600px]"></div>
+        <div className="absolute bottom-44 -left-64  h-[150px] w-[200px] -rotate-45 rounded-3xl bg-gradient-to-r from-violet-600 to-indigo-800 opacity-30 blur-3xl filter  lg:bottom-24 lg:-left-20 lg:h-28 lg:w-[250px] lg:-rotate-12 lg:opacity-20 xl:h-40 xl:w-[400px]"></div>
         {loading ? (
           <div className="text-center">
             <div role="status">
@@ -174,12 +245,10 @@ function Enrollment() {
             <div className="mt-16  flex flex-col gap-10 lg:mt-0   lg:flex-row lg:gap-28">
               <div className="flex flex-col space-y-4 text-center lg:text-left">
                 <h1 className="hero-title">
-                  <span className="text-[#07A8ED]">
-                    {CourseData?.course_name}{" "}
-                  </span>
+                  <span className="text-[#31972a]">{Course?.course_name} </span>
                 </h1>
                 <p className="text-1 text-medium mt-8 text-center lg:text-left">
-                  {CourseData?.course_desc}
+                  {Course?.course_desc}
                 </p>
                 <div className="mx-auto mt-10 flex gap-4 lg:mx-0">
                   <div className="flex flex-col space-y-3">
@@ -193,7 +262,7 @@ function Enrollment() {
                             <span>
                               <MdOutlineWatchLater size={20} />
                             </span>
-                            <span>{CourseData?.price}</span>
+                            <span>{Course?.price}</span>
                             <span className="flex items-center text-secondary1 text-secondary1">
                               |
                             </span>
@@ -208,9 +277,9 @@ function Enrollment() {
               <div className="relative flex-1 items-center justify-center">
                 <div className="aspect-video scale-100 overflow-hidden rounded-md ring-2 ring-[#61D0D7] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(97,208,215,.5)] lg:!h-[350px] lg:!w-[600px]">
                   <img
-                    src={CourseData?.Image?.image_url}
+                    src={`${Course?.Image?.image_url}`}
                     alt=""
-                    style={{ width: "100%", height: "100%" }}
+                    className=" w-full h-full"
                   />
                 </div>
               </div>
@@ -263,13 +332,19 @@ function Enrollment() {
               </span>
             </div>
             <h1 className="section-title">
-              <span className="text-[#07A8ED]">Course</span> content
+              <span className="text-[#31972a]">Course</span> content
             </h1>
             <p className="subtitle">
               101 sections • 636 lectures • 58h 19m total length
             </p>
           </div>
-          <div className="shadow-1 border-general relative mx-auto  divide-y border  lg:p-8 dark:bg-slate-500/[0.6] xl:max-w-4xl">
+          <div
+            className={`${
+              theme === "light"
+                ? "text-black bg-slate-50"
+                : "bg-slate-950 text-slate-300"
+            } shadow-1 border-general relative mx-auto  divide-y border  lg:p-8  xl:max-w-4xl`}
+          >
             <div className="relative flex h-full w-full items-center justify-center">
               <div
                 className="mantine-ScrollArea-root w-full mantine-jghxib"
@@ -283,29 +358,37 @@ function Enrollment() {
                 {videoData.map((data) => (
                   <div
                     key={data.idChapters}
-                    className="lg:w-full border-b border-neutral-700"
+                    className={`${
+                      theme === "light"
+                        ? "border-neutral-300"
+                        : "border-neutral-700"
+                    } lg:w-full border-b `}
                   >
                     <div
-                      className="flex transition pt-3  duration-300 ease-in-out  lg:pt-4 lg:pl-2 pr-3 pb-4 justify-between cursor-pointer gap-5 lg:items-center"
+                      className="flex transition pt-3 hover:bg-[#31972a] hover:text-white duration-300 ease-in-out  lg:pt-4 lg:pl-2 pr-3 pb-4 justify-between cursor-pointer gap-5 lg:items-center"
                       onClick={() => handlePreviewReply(data.idChapters)}
                       style={{
                         backgroundColor:
                           Openvisible && Previewid === data.idChapters
-                            ? " rgb(2 132 199)"
+                            ? " #31972a"
+                            : "",
+                        color:
+                          Openvisible && Previewid === data.idChapters
+                            ? "white"
                             : "",
                       }}
                     >
-                      <div className=" lg:ml-0 ml-2  text-white">
-                        {Openvisible && Previewid === data.id ? (
+                      <div className={`" lg:ml-0 ml-2`}>
+                        {Openvisible && Previewid === data.idChapters ? (
                           <IoIosArrowUp size={20} />
                         ) : (
                           <IoIosArrowDown size={20} />
                         )}
                       </div>
-                      <h3 className="text-slate-300 mantine-hgwlez text-xs lg:text-sm">
+                      <h3 className=" mantine-hgwlez text-xs lg:text-base ">
                         {data.name}
                       </h3>
-                      <div className=" lg:flex lg:gap-3 text-slate-300 hidden  ">
+                      <div className=" lg:flex lg:gap-3  hidden  ">
                         <div>{data?.Videos?.length} lectures</div>
 
                         <div>.1hr 7min</div>
@@ -313,7 +396,11 @@ function Enrollment() {
                     </div>
                     {Openvisible && Previewid === data.idChapters && (
                       <div
-                        className=" text-slate-400"
+                        className={`${
+                          theme === "light"
+                            ? "text-black bg-slate-50"
+                            : "bg-slate-950 text-slate-400"
+                        }`}
                         style={{
                           opacity: 1,
                           transition: "opacity 500ms ease 0s",
@@ -327,14 +414,14 @@ function Enrollment() {
                             >
                               <div>
                                 {!data.payment ? (
-                                  <MdOutlineOndemandVideo className="lg:text-base" />
+                                  <MdOutlineOndemandVideo className="lg:text-base mt-1" />
                                 ) : (
                                   <CgLock className="lg:text-sm" />
                                 )}
                               </div>
                               <div className="lg:w-10/12 w-full">
                                 <button
-                                  className="text-violet-400 underline text-sm lg:text-sm"
+                                  className=" underline text-sm lg:text-sm"
                                   onClick={() => handleOpen(item)}
                                 >
                                   {item?.video_name}
@@ -344,11 +431,11 @@ function Enrollment() {
                                 <>
                                   <button
                                     onClick={() => handleOpen(item)}
-                                    className="mr-10  text-violet-400 underline hidden lg:block"
+                                    className="mr-10   font-semibold underline hidden lg:block"
                                   >
                                     Preview
                                   </button>
-                                  <div className="hidden lg:block">3.30</div>
+                                  <div className="hidden  lg:block">3.30</div>
                                 </>
                               )}
                             </li>
@@ -409,7 +496,7 @@ function Enrollment() {
             </div>
             <h1 className="section-title">
               Our Reactive
-              <span className="text-[#07A8ED]"> Accelerator </span> course at a
+              <span className="text-[#31972a]"> Accelerator </span> course at a
               glance
             </h1>
             <p className="subtitle">Everything in this course</p>
@@ -424,7 +511,7 @@ function Enrollment() {
                       fill="currentColor"
                       strokeWidth="0"
                       viewBox="0 0 16 16"
-                      className="text-[#07A8ED]"
+                      className="text-[#31972a]"
                       height="48"
                       width="48"
                       xmlns="http://www.w3.org/2000/svg"
@@ -449,7 +536,7 @@ function Enrollment() {
                       fill="currentColor"
                       strokeWidth="0"
                       viewBox="0 0 16 16"
-                      className="text-[#07A8ED]"
+                      className="text-[#31972a]"
                       height="48"
                       width="48"
                       xmlns="http://www.w3.org/2000/svg"
@@ -474,7 +561,7 @@ function Enrollment() {
                       fill="currentColor"
                       strokeWidth="0"
                       viewBox="0 0 16 16"
-                      className="text-[#07A8ED]"
+                      className="text-[#31972a]"
                       height="48"
                       width="48"
                       xmlns="http://www.w3.org/2000/svg"
@@ -499,7 +586,7 @@ function Enrollment() {
                       fill="currentColor"
                       strokeWidth="0"
                       viewBox="0 0 16 16"
-                      className="text-[#07A8ED]"
+                      className="text-[#31972a]"
                       height="48"
                       width="48"
                       xmlns="http://www.w3.org/2000/svg"
@@ -566,7 +653,13 @@ function Enrollment() {
               </div>
             </div>
             <h1 className="section-title ">
-              <span className="text-[#07A8ED]">How will</span> <span className={`${theme ==="light"? "text-black":"text-white"}`}> the course work?</span>
+              <span className="text-[#31972a]">How will</span>{" "}
+              <span
+                className={`${theme === "light" ? "text-black" : "text-white"}`}
+              >
+                {" "}
+                the course work?
+              </span>
             </h1>
             <p className="subtitle">
               How we can help you become a skilled in this subject
@@ -932,7 +1025,11 @@ function Enrollment() {
           </div>
         </div>
       </section>
-      <section className={`wrapper border-t border-b ${theme==="light"?"border-gray-100":"border-gray-700	"}    !bg-primary1 dark:!bg-slate-800 dark:bg-none`}>
+      <section
+        className={`wrapper border-t border-b ${
+          theme === "light" ? "border-gray-100" : "border-gray-700	"
+        }    !bg-primary1 dark:!bg-slate-800 dark:bg-none`}
+      >
         <div className="container space-y-14">
           <h1 className="section-title text-center text-4xl ">
             Course Instructor
@@ -1024,7 +1121,7 @@ function Enrollment() {
       </section>
       <section className="wrapper bg-1 gradient-primary border-general  scroll-mt-16  dark:bg-none">
         <div className="container space-y-14">
-        <div className="w-full text-center">
+          <div className="w-full text-center">
             <div className="flex h-full w-full items-center justify-center">
               <div style={{ opacity: "1", transform: " none" }}>
                 <span className="style_haeding">
@@ -1068,45 +1165,38 @@ function Enrollment() {
               </div>
             </div>
             <h1 className="section-title">
-              
-              <span className="primary-highlighter">Learners'</span> opinions about the course
+              <span className="primary-highlighter">Learners'</span> opinions
+              about the course
             </h1>
             <p className="subtitle">
-            Learners have always expressed their love for Trace Accademy
-
+              Learners have always expressed their love for Trace Accademy
             </p>
           </div>
           <div className="mantine-Container-root px relative md:px-8 lg:px-16 mantine-akkprt">
             <div
               className={` ${
                 visible
-                  ? "mantine-SimpleGrid-root mantine-c577qn"
-                  : "mantine-SimpleGrid-root h-[900px] overflow-y-hidden mantine-c577qn "
+                  ? "mantine-SimpleGrid-root "
+                  : "mantine-SimpleGrid-root h-[700px] overflow-y-hidden  "
               } `}
+              ref={containerRef}
             >
-              <div className="space-y-6">
-                <div className={`mantine-Paper-root border-general border dark:bg-slate-800/[0.6] ${theme==="light" ? "text-black bg-white ": "text-violet-100 "}  mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
+              <div className=" mantine-c577qn gap-2">
+                {feedBackData.map((data, index) => (
+                  <div
+                    className={`mantine-Paper-root  border-general border dark:bg-slate-800/[0.6] ${
+                      theme === "light"
+                        ? "text-black bg-white "
+                        : "text-violet-100 "
+                    }  mantine-1jdao0l`}
+                    key={index}
+                  >
+                    <div className="mantine-Group-root mantine-6y1794">
                       <span
                         style={{
                           boxSizing: "border-box",
-                          display: "block",
+                          display: "inline-block",
+                          overflow: "hidden",
                           width: "initial",
                           height: "initial",
                           background: "none",
@@ -1114,13 +1204,14 @@ function Enrollment() {
                           border: 0,
                           margin: 0,
                           padding: 0,
-                          maxWidth: "100%",
+                          position: "relative",
+                          maxWidth: "10%",
                         }}
                       >
-                        <img
+                        <span
                           style={{
+                            boxSizing: "border-box",
                             display: "block",
-                            maxWidth: "100%",
                             width: "initial",
                             height: "initial",
                             background: "none",
@@ -1128,43 +1219,32 @@ function Enrollment() {
                             border: 0,
                             margin: 0,
                             padding: 0,
+                            maxWidth: "100%",
                           }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Review1}?w=50&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
+                        >
+                          <img
+                            style={{
+                              display: "block",
+                              maxWidth: "100%",
+                              width: "initial",
+                              height: "initial",
+                              background: "none",
+                              opacity: 1,
+                              border: 0,
+                              margin: 0,
+                              padding: 0,
+                            }}
+                            alt=""
+                            aria-hidden="true"
+                            src={img1}
+                          />
+                        </span>
                         <img
                           alt="Masud Pervez"
-                          src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
+                          src={`${Review1}?w=50&q=75`}
                           decoding="async"
                           data-nimg="intrinsic"
+                          className="mantine-gnzaph mantine-Group-child rounded-full"
                           style={{
                             position: "absolute",
                             top: 0,
@@ -1183,1340 +1263,86 @@ function Enrollment() {
                             minHeight: "100%",
                             maxHeight: "100%",
                           }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
                         />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      খুব অল্প সময়ের মধ্যে রিডাক্সের সবকিছু শিক্ষতে পারছি এটাই
-                      বড় পাওনা। এত সুন্দর ভাবে বুঝানোর জন্য ধন্যবাদ জানায় সুমিত
-                      দাদাকে। আর এই কোর্স করে আমি আমার বাস্তব জীবনে অনেক উপকৃত
-                      হয়েছি।
-                    </div>
-                  </div>
-                </div>
-                <div className={`mantine-Paper-root border-general border dark:bg-slate-800/[0.6] ${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
+                        <noscript>
+                          <img
+                            alt="Masud Pervez"
+                            src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
+                            decoding="async"
+                            data-nimg="intrinsic"
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              bottom: 0,
+                              right: 0,
+                              boxSizing: "border-box",
+                              padding: 0,
+                              border: "none",
+                              margin: "auto",
+                              display: "block",
+                              width: 0,
+                              height: 0,
+                              minWidth: "100%",
+                              maxWidth: "100%",
+                              minHeight: "100%",
+                              maxHeight: "100%",
+                            }}
+                            className="mantine-gnzaph mantine-Group-child rounded-full"
+                            loading="lazy"
+                          />
+                        </noscript>
                       </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Instructor}?w=96&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
+                      <div className="mantine-gnzaph mantine-Group-child space-y-1">
+                        <div className="mantine-Text-root mantine-1jcp2pl">
+                          {data.Student?.name}
+                        </div>
+                        <div className="flex space-x-0.5">
+                          {Array.from({ length: data.rating }, (_, index) => (
+                            <svg
+                              key={index}
+                              stroke="currentColor"
+                              fill="currentColor"
+                              strokeWidth="0"
+                              viewBox="0 0 1024 1024"
+                              color="orange"
+                              style={{ color: "orange" }}
+                              height="14"
+                              width="14"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
+                            </svg>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      The course was the best I have ever seen. I have done
-                      other courses before but never got full time support like
-                      this course. LWS team always support us in any matter.
-                      Also one thing that I liked very much was the live session
-                      every week which cleared many questions and problems in
-                      our mind. Also the marking of the course has been done
-                      very well and all our mistakes have been given line by
-                      line. Also I learned how to code cleanly and after
-                      pointing out mistakes I got it right. No more problems
-                      with my redux I am very confident now, thanks a lot to LWS
-                      team for giving us such a beautiful course.
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-6">
-                <div className={`${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-Paper-root border-general border dark:bg-slate-800/[0.6] mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
+                    <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
+                      <div
+                        className={`${
+                          theme === "light" ? "text-black " : "text-violet-100"
+                        } mantine-1ob529b `}
                       >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Instructor}?w=96&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src={`${Instructor}?w=96&q=75`}
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
+                        {data.feedback}
                       </div>
                     </div>
                   </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      I have learned a lot of things and gained confidence about
-                      redux. The quiz helps me learn from the documentation and
-                      the model test helped me practice new things in redux. The
-                      code review and result section is the perfect things in
-                      this course. every task has been checked and giving
-                      reviews about the programmer skills is awesome. I get more
-                      confidence when I see the ranking section. Because a lot
-                      of good programmers have ranked in this course
-                    </div>
-                  </div>
-                </div>
-                <div className={`${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-Paper-root border-general border dark:bg-slate-800/[0.6] mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Instructor}?w=96&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src={`${Instructor}?w=96&q=75`}
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      I have learned a lot of things and gained confidence about
-                      redux. The quiz helps me learn from the documentation and
-                      the model test helped me practice new things in redux. The
-                      code review and result section is the perfect things in
-                      this course. every task has been checked and giving
-                      reviews about the programmer skills is awesome. I get more
-                      confidence when I see the ranking section. Because a lot
-                      of good programmers have ranked in this course
-                    </div>
-                  </div>
-                </div>
-                <div className={`${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-Paper-root border-general border dark:bg-slate-800/[0.6] mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Instructor}?w=96&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      Quality not depends on Quantity! এর চাক্ষুষ প্রমাণ সুমিত
-                      ভাইয়ের থিংক ইন এ রিডাক্স ওয়ে কোর্সটি। যদি আপনি কোর্সটিকে
-                      এর মাত্র ১৯৯৯ টাকা ফি দিয়ে বিচার করেন তাহলে আপনি ষোল আনাই
-                      ভুল। সুমিত ভাইয়ের শেখানোর পদ্ধতি নিয়ে নতুন করে কিছুই বলার
-                      নেই। বিলাসী নারীদের কাছে অলংকার ( সোনা, হীরা ) যেমন প্রিয়
-                      ঠিক তেমনই প্রকৃত লার্নারদের কাছে সুমিত ভাইয়ের টিউটোরিয়াল
-                      তেমন প্রিয়। যদি স্পেশালভাবে কিছু বলার থাকে তাহলে আমি বলব
-                      LWS এর চমৎকার সাপোর্টের কথা। এইটা আসলেই স্পেশাল ছিল ।
-                      সুমিত ভাই ও বাকি এডমিন প্যানেল আমাদের সাথে এতটাই আন্তরিক ও
-                      ইন্টার‍্যাক্টিভ ছিল যা আপনাকে আমি বলে বুঝাতে পারব না । আর
-                      কিছু বলতে চাই না তবে LWS কে একটা ধন্যবাদের আনলিমিটেড
-                      প্যাকেজ দিয়ে দিলাম।
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-6">
-                <div className={`${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-Paper-root border-general border dark:bg-slate-800/[0.6] mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Review1}?w=50&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      খুব অল্প সময়ের মধ্যে রিডাক্সের সবকিছু শিক্ষতে পারছি এটাই
-                      বড় পাওনা। এত সুন্দর ভাবে বুঝানোর জন্য ধন্যবাদ জানায় সুমিত
-                      দাদাকে। আর এই কোর্স করে আমি আমার বাস্তব জীবনে অনেক উপকৃত
-                      হয়েছি।
-                    </div>
-                  </div>
-                </div>
-                <div className={`${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-Paper-root border-general border dark:bg-slate-800/[0.6] mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Instructor}?w=96&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      খুব অল্প সময়ের মধ্যে রিডাক্সের সবকিছু শিক্ষতে পারছি এটাই
-                      বড় পাওনা। এত সুন্দর ভাবে বুঝানোর জন্য ধন্যবাদ জানায় সুমিত
-                      দাদাকে। আর এই কোর্স করে আমি আমার বাস্তব জীবনে অনেক উপকৃত
-                      হয়েছি।
-                    </div>
-                  </div>
-                </div>
-                <div className={`${theme==="light" ? "text-black bg-white ": "text-violet-100 "} mantine-Paper-root border-general border dark:bg-slate-800/[0.6] mantine-1jdao0l`}>
-                  <div className="mantine-Group-root mantine-6y1794">
-                    <span
-                      style={{
-                        boxSizing: "border-box",
-                        display: "inline-block",
-                        overflow: "hidden",
-                        width: "initial",
-                        height: "initial",
-                        background: "none",
-                        opacity: 1,
-                        border: 0,
-                        margin: 0,
-                        padding: 0,
-                        position: "relative",
-                        maxWidth: "10%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          boxSizing: "border-box",
-                          display: "block",
-                          width: "initial",
-                          height: "initial",
-                          background: "none",
-                          opacity: 1,
-                          border: 0,
-                          margin: 0,
-                          padding: 0,
-                          maxWidth: "100%",
-                        }}
-                      >
-                        <img
-                          style={{
-                            display: "block",
-                            maxWidth: "100%",
-                            width: "initial",
-                            height: "initial",
-                            background: "none",
-                            opacity: 1,
-                            border: 0,
-                            margin: 0,
-                            padding: 0,
-                          }}
-                          alt=""
-                          aria-hidden="true"
-                          src={img1}
-                        />
-                      </span>
-                      <img
-                        alt="Masud Pervez"
-                        src={`${Instructor}?w=96&q=75`}
-                        decoding="async"
-                        data-nimg="intrinsic"
-                        className="mantine-gnzaph mantine-Group-child rounded-full"
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          right: 0,
-                          boxSizing: "border-box",
-                          padding: 0,
-                          border: "none",
-                          margin: "auto",
-                          display: "block",
-                          width: 0,
-                          height: 0,
-                          minWidth: "100%",
-                          maxWidth: "100%",
-                          minHeight: "100%",
-                          maxHeight: "100%",
-                        }}
-                      />
-                      <noscript>
-                        <img
-                          alt="Masud Pervez"
-                          src="/_next/image?url=%2F_next%2Fstatic%2Fmedia%2F23.5bbb3c7c.jpg&amp;w=96&amp;q=75"
-                          decoding="async"
-                          data-nimg="intrinsic"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            bottom: 0,
-                            right: 0,
-                            boxSizing: "border-box",
-                            padding: 0,
-                            border: "none",
-                            margin: "auto",
-                            display: "block",
-                            width: 0,
-                            height: 0,
-                            minWidth: "100%",
-                            maxWidth: "100%",
-                            minHeight: "100%",
-                            maxHeight: "100%",
-                          }}
-                          className="mantine-gnzaph mantine-Group-child rounded-full"
-                          loading="lazy"
-                        />
-                      </noscript>
-                    </span>
-                    <div className="mantine-gnzaph mantine-Group-child space-y-1">
-                      <div className="mantine-Text-root mantine-1jcp2pl">
-                        Masud Pervez
-                      </div>
-                      <div className="flex space-x-0.5">
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                        <svg
-                          stroke="currentColor"
-                          fill="currentColor"
-                          strokeWidth="0"
-                          viewBox="0 0 1024 1024"
-                          color="orange"
-                          style={{ color: "orange" }}
-                          height="14"
-                          width="14"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M908.1 353.1l-253.9-36.9L540.7 86.1c-3.1-6.3-8.2-11.4-14.5-14.5-15.8-7.8-35-1.3-42.9 14.5L369.8 316.2l-253.9 36.9c-7 1-13.4 4.3-18.3 9.3a32.05 32.05 0 0 0 .6 45.3l183.7 179.1-43.4 252.9a31.95 31.95 0 0 0 46.4 33.7L512 754l227.1 119.4c6.2 3.3 13.4 4.4 20.3 3.2 17.4-3 29.1-19.5 26.1-36.9l-43.4-252.9 183.7-179.1c5-4.9 8.3-11.3 9.3-18.3 2.7-17.5-9.5-33.7-27-36.3z"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mantine-TypographyStylesProvider-root mantine-1ctjcu4">
-                    <div className={`${theme==="light" ? "text-black ": "text-violet-100"} mantine-1ob529b `}>
-                      কোর্সটি অসাধারণ। রিডাক্স এর প্রথম থেকে শুরু করে এডভান্স
-                      পর্যন্ত যত টুকু দেখিয়েছেন স্যার, এত টুকু যদি লার্নাররা
-                      ভালো করে কম্পলিট করে থাকেন, তাহলে রিডাক্স নিয়ে কাজ করতে
-                      কোন প্রবলেম হবে না। আমার লার্নারদের প্রতি একটি সাজেশন
-                      থাকবে। কোর্স এর ভিডিও প্রতিদিন দেখা শেষ করে প্র্যাকটিস
-                      করবেন এবং যত টুকু স্যার প্রতিদিন শেখাবেন। সেই টপিক অনুযায়ী
-                      রিডাক্স এর অফিশিয়াল ডকুমেন্টেশন পড়বেন। এবং সব শেষে একটি
-                      কথাই বলবো কোর্স টি যারা ক্রয় করেন নি, তারা অবশ্যই কোর্স টি
-                      ক্রয় করবেন। লার্নার দের প্রতি শুভ কামনা থাকলো।
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
-            {!visible && (
-              <div className={`${theme==="light" ? "from-white ": "from-slate-900 "} absolute inset-x-0 lg:inset-x-16 bottom-0 flex justify-center bg-gradient-to-t from-slate-900 pt-32 pb-8  false `}>
+            {!visible && visibleButton && (
+              <div
+                className={`${
+                  theme === "light" ? "from-white " : "from-slate-900 "
+                } absolute inset-x-0 lg:inset-x-16 bottom-0 flex justify-center bg-gradient-to-t from-slate-900 pt-32 pb-8  false `}
+              >
                 <button
-                  className="mantine-Button-filled  dark:bg-secondary2 hover:bg-slate-700 dark:hover:bg-secondary1  mantine-Button-root mantine-1ogymfb"
+                  className="mantine-Button-filled  bg-secondary2  hover:bg-secondary1  mantine-Button-root mantine-button"
                   type="button"
                   onClick={handleReview}
                 >
-                  <div className="mantine-3xbgk5 mantine-Button-inner">
-                    <span className="mantine-qo1k2 mantine-Button-label">
+                  <div className="mantine-review ">
+                    <span className="mantine-qo1k2 ">
                       <div className="flex justify-between gap-2">
                         <span>আরো রিভিউ দেখুন</span>
                       </div>
@@ -2573,11 +1399,14 @@ function Enrollment() {
                 </span>
               </div>
               <h1 className="section-title text-4xl lg:w-2/3">
-               
-                <span className="primary-highlighter">Answers </span>to frequently asked questions
+                <span className="primary-highlighter">Answers </span>to
+                frequently asked questions
               </h1>
               <p className="text-medium text-1 mt-8">
-              We have listed here the answers to some of your common questions. Please read this list once before asking questions. Then you don't have to wait for our reply and save your precious time.
+                We have listed here the answers to some of your common
+                questions. Please read this list once before asking questions.
+                Then you don't have to wait for our reply and save your precious
+                time.
               </p>
             </div>
             <div className="relative flex h-full w-full items-center justify-center">
@@ -2590,7 +1419,6 @@ function Enrollment() {
                   height: "400px",
                 }}
               >
-               
                 <div className="lg:w-11/12 border-b border-neutral-700">
                   <div
                     className="flex transition duration-300 ease-in-out hover:bg-cyan-600 faq_hover  lg:pt-4 lg:pl-2 pr-3 pb-4 justify-between cursor-pointer gap-14 items-center"
@@ -2604,16 +1432,24 @@ function Enrollment() {
                         Openvisible && id === 2 ? " rgb(2 132 199)" : "",
                     }}
                   >
-                    <h3 className={`${theme=="light"? "text-[#334451]":"text-slate-300"}   mantine-hgwlez `}style={{
-                      color:
-                        Openvisible && id === 2 ? "white" : "",
-                    }} >
+                    <h3
+                      className={`${
+                        theme == "light" ? "text-[#334451]" : "text-slate-300"
+                      }   mantine-hgwlez `}
+                      style={{
+                        color: Openvisible && id === 2 ? "white" : "",
+                      }}
+                    >
                       কোর্সটি করার জন্য আগে থেকে কি কি জানতে হবে?
                     </h3>
-                    <div className={`lg:ml-28 ${theme=="light"? "text-[#334451]":"text-white"} `}style={{
-                      color:
-                        Openvisible && id === 2 ? "white" : "",
-                    }} >
+                    <div
+                      className={`lg:ml-28 ${
+                        theme == "light" ? "text-[#334451]" : "text-white"
+                      } `}
+                      style={{
+                        color: Openvisible && id === 2 ? "white" : "",
+                      }}
+                    >
                       {Openvisible && id === 2 ? (
                         <IoIosArrowUp size={20} />
                       ) : (
@@ -2623,7 +1459,9 @@ function Enrollment() {
                   </div>
                   {Openvisible && id === 2 && (
                     <div
-                      className={` mt-4 pb-3 ${theme=="light"? "text-[#334155]":"text-slate-400"} `}
+                      className={` mt-4 pb-3 ${
+                        theme == "light" ? "text-[#334155]" : "text-slate-400"
+                      } `}
                       style={{
                         opacity: 1,
                         transition: "opacity 500ms ease 0s",
@@ -2635,7 +1473,6 @@ function Enrollment() {
                     </div>
                   )}
                 </div>
-              
               </div>
             </div>
           </div>
@@ -2656,13 +1493,18 @@ function Enrollment() {
           100 Days of Code: The Complete Python Pro Bootcamp
         </div>
         <div style={{ position: "relative" }}>
-          <iframe
-            src={source}
-            width="100%"
-            height="400"
-            allow="autoplay"
-            frameBorder="0"
-          ></iframe>
+          {otp && playbackInfo ? (
+            <iframe
+              key={iframeKey}
+              src={`https://player.vdocipher.com/v2/?otp=${otp}&playbackInfo=${playbackInfo}`}
+              width="100%"
+              height="360"
+              allow="encrypted-media"
+              allowFullScreen
+            ></iframe>
+          ) : (
+            <p>Loading...</p>
+          )}
         </div>
       </Modal>
     </>

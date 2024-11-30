@@ -6,7 +6,7 @@ import axiosInstance from "../axiosInstance";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 
-const socket = io("https://real-time-video-chat-app-backend.onrender.com");
+const socket = io(import.meta.env.VITE_SOCKET_IO_URL);
 
 export default function CreateRoom() {
   const [className, setClassName] = useState("");
@@ -37,7 +37,7 @@ export default function CreateRoom() {
 
     try {
       const response = await axios.post(
-        "https://real-time-video-chat-app-backend.onrender.com/api/carete/room",
+        ` ${import.meta.env.VITE_SOCKET_IO_URL}/api/carete/room`,
         {
           live_name: className,
           live_link: roomLink,
@@ -53,7 +53,7 @@ export default function CreateRoom() {
           role: "admin",
         });
 
-       navigate(roomLink)
+        navigate(roomLink);
       }
     } catch (e) {
       console.log("Error create room", e);
@@ -65,37 +65,27 @@ export default function CreateRoom() {
   };
 
   return (
-    <div className="container m-auto flex items-center justify-center h-screen">
-      <ToastContainer />
-      <div className="border md:w-[30vw] w-full shadow-md">
-        <div className="bg-coching-text_color text-white py-3">
-          <h1 className="text-2xl text-center">Create Room or Join Room</h1>
-        </div>
-        <div className="w-full px-2 py-3">
-          <input
-            type="text"
-            placeholder="Write your live class name"
-            onChange={(e) => setClassName(e.target.value)}
-            className="border w-full py-2 rounded-md px-2 outline-none"
-          />
-        </div>
-        <div className="w-full px-2 py-3">
-          <input
-            type="text"
-            placeholder="Write your name"
-            onChange={(e) => setName(e.target.value)}
-            className="border w-full py-2 rounded-md px-2 outline-none"
-          />
-        </div>
-        <div className="w-full px-2 py-2">
-          <button
-            onClick={handleSubmit}
-            className="bg-gray-800 w-full py-2 text-white rounded-md"
-          >
-            Submit
-          </button>
-        </div>
-      </div>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        padding: "1rem",
+      }}
+    >
+      <iframe
+        src="https://player.vdocipher.com/live?liveId=a22672ffee1242f28d8fe498aebca0b8"
+        style={{
+          border: "0",
+          width: "720px",
+          aspectRatio: "16/9",
+          maxWidth: "100%",
+        }}
+        allow="autoplay; fullscreen"
+        allowFullScreen
+        title="Live Stream"
+      ></iframe>
     </div>
   );
 }

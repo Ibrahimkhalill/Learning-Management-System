@@ -13,10 +13,11 @@ import FaceDetection from "../FaceDetaction";
 import AlertModal from "../AlertModal";
 import notificationSound from "../../../public/notification/join_call.mp3";
 import NotificationModal from "./NotificationModal";
-
+import ScreenRecordingOverlay from "./ScreenRecordingOverlay ";
+import MuxPlayer from "@mux/mux-player-react";
 const appId = "2450467a64c845fd97d9e60e6e06804a";
 const token = null;
-const socket = io("http://localhost:5000");
+const socket = io(import.meta.env.VITE_SOCKET_IO_URL);
 const useOrientation = () => {
   const [isPortrait, setIsPortrait] = useState(
     window.innerHeight > window.innerWidth
@@ -77,15 +78,14 @@ const LiveStream = () => {
 
         console.log("Joining channel...");
         await client.join(appId, roomId, token);
-     
+
         setClientJoined(true);
 
         const role = localStorage.getItem("role");
-        
+
         await client.setClientRole(role === "admin" ? "host" : "audience");
         if (!screenShare) {
           if (role === "admin") {
-          
             const [microphoneTrack, cameraTrack] =
               await AgoraRTC.createMicrophoneAndCameraTracks();
             setLocalTracks([microphoneTrack, cameraTrack]);
@@ -159,8 +159,6 @@ const LiveStream = () => {
       socket.off("notify admin");
     };
   }, [role, roomId, userName]);
-
-
 
   useEffect(() => {
     if (localTracks.length > 0) {
@@ -358,7 +356,6 @@ const LiveStream = () => {
     socket.emit("adminLeft", roomId);
   }, [roomId]);
 
-
   const hangB = async () => {
     try {
       // Leave the channel and stop local tracks
@@ -417,7 +414,7 @@ const LiveStream = () => {
   useEffect(() => {
     const intervalId = setInterval(() => {
       setAccessGranted(false);
-    }, 2 * 60 * 1000); 
+    }, 2 * 60 * 1000);
     // Clean up the interval on component unmount
     return () => clearInterval(intervalId);
   }, []);
@@ -651,7 +648,7 @@ const LiveStream = () => {
       </div>
       <AlertModal
         error={error}
-        visible={AlertVisible}
+        AlertVisible={AlertVisible}
         setAlertVisible={setAlertVisible}
         navigateUrl={navigateUrl}
       />
@@ -664,6 +661,7 @@ const LiveStream = () => {
         setCurrentNotification={setCurrentNotification}
         currentNotification={currentNotification}
       />
+      <ScreenRecordingOverlay />
     </main>
   );
 };

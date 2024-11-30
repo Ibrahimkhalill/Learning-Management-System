@@ -36,6 +36,7 @@ const FaceDetection = ({ onAccessGranted,setNavigateUrl,setError, setAlertVisibl
           setError(
             "Could not access webcam. Please ensure it is connected and not being used by another application."
           );
+          console.log("jksdfjsdfjs")
           setAlertVisible(true)
           errorOccurred = true; // Prevent further attempts
           cleanup();

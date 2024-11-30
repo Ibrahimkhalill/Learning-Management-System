@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 const AlertModal = ({ AlertVisible, setAlertVisible, error, navigateUrl }) => {
   const [animation, setAnimation] = useState(false);
   const navigate = useNavigate();
+  console.log("AlertVisible",AlertVisible);
+  
   const handleFalse = () => {
     setAnimation(true); // Trigger the animation (start zoom out)
 
